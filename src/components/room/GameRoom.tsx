@@ -1,7 +1,7 @@
 'use client'
 import { useCallback } from 'react'
 import { useSocket } from '@/hooks/useSocket'
-import type { Room } from '@/types/game'
+import type { Room, RevealableField } from '@/types/game'
 import { SongPicker } from './SongPicker'
 import { GuessPanel } from './GuessPanel'
 import { RoundResults } from './RoundResults'
@@ -48,7 +48,7 @@ export function GameRoom({ room: activeRoom, currentUserId }: GameRoomProps) {
     socket?.emit('game:reveal-next-song', () => {})
   }
 
-  function revealField(index: number, field: 'title' | 'artist') {
+  function revealField(index: number, field: RevealableField) {
     socket?.emit('game:reveal-field', { index, field }, () => {})
   }
 
@@ -115,9 +115,13 @@ export function GameRoom({ room: activeRoom, currentUserId }: GameRoomProps) {
 
   // ── Guessing phase ────────────────────────────────────────────────────────
   if (activeRoom.state === 'guessing' && currentRound) {
-    const hasGuessed = currentRound.guesses.some((g) => g.playerId === currentUserId)
+    const myGuesses = currentRound.guesses.filter((g) => g.playerId === currentUserId)
+    let guessStatus: 'idle' | 'pending' | 'correct' = 'idle'
+    if (myGuesses.some((g) => g.isCorrect === true)) guessStatus = 'correct'
+    else if (myGuesses.some((g) => g.isCorrect === undefined)) guessStatus = 'pending'
     const revealedCount = currentRound.revealedCount ?? currentRound.songs.length
-    const { hideArtist, hideSongTitle, sequentialReveal } = activeRoom.settings
+    const { hideArtist, hideSongTitle, hideCoverArt, hideAlbumName, hidePreview, sequentialReveal } =
+      activeRoom.settings
 
     return (
       <div className="mx-auto max-w-2xl px-4 py-8 flex flex-col gap-6">
@@ -131,7 +135,13 @@ export function GameRoom({ room: activeRoom, currentUserId }: GameRoomProps) {
           {currentRound.songs.length > 0 ? (
             currentRound.songs.map((song, i) => {
               const isRevealedToPlayers = i < revealedCount
-              const fields = currentRound.revealedFields[i] ?? { title: false, artist: false }
+              const fields = currentRound.revealedFields[i] ?? {
+                title: false,
+                artist: false,
+                album: false,
+                albumArt: false,
+                previewUrl: false,
+              }
               return (
                 <div key={(song as any).trackId} className="flex flex-col gap-1">
                   <SongCard
@@ -160,6 +170,30 @@ export function GameRoom({ room: activeRoom, currentUserId }: GameRoomProps) {
                           Reveal artist
                         </button>
                       )}
+                      {isRevealedToPlayers && hideCoverArt && !fields.albumArt && (
+                        <button
+                          onClick={() => revealField(i, 'albumArt')}
+                          className="text-green-400 hover:underline"
+                        >
+                          Reveal cover
+                        </button>
+                      )}
+                      {isRevealedToPlayers && hideAlbumName && !fields.album && (
+                        <button
+                          onClick={() => revealField(i, 'album')}
+                          className="text-green-400 hover:underline"
+                        >
+                          Reveal album
+                        </button>
+                      )}
+                      {isRevealedToPlayers && hidePreview && !fields.previewUrl && (
+                        <button
+                          onClick={() => revealField(i, 'previewUrl')}
+                          className="text-green-400 hover:underline"
+                        >
+                          Reveal preview
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -184,7 +218,8 @@ export function GameRoom({ room: activeRoom, currentUserId }: GameRoomProps) {
           roomId={activeRoom.id}
           isPicker={isPicker}
           currentUserId={currentUserId}
-          hasGuessed={hasGuessed}
+          guessStatus={guessStatus}
+          myGuessCount={myGuesses.length}
           disabled={currentRound.songs.length === 0}
         />
 

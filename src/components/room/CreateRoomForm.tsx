@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useRoom } from '@/hooks/useRoom'
 import type { RoomSettings } from '@/types/game'
-import { Eye, EyeOff, Lock, Users, Hash, Clock, RefreshCw, ListOrdered } from 'lucide-react'
+import { Eye, EyeOff, Lock, Users, Hash, Clock, RefreshCw, ListOrdered, Image as ImageIcon, Disc, Volume2 } from 'lucide-react'
 
 const DEFAULTS: Partial<RoomSettings> = {
   maxPlayers: 8,
@@ -12,6 +12,9 @@ const DEFAULTS: Partial<RoomSettings> = {
   guessTimeSecs: 60,
   hideArtist: false,
   hideSongTitle: false,
+  hideCoverArt: false,
+  hideAlbumName: false,
+  hidePreview: false,
   sequentialReveal: false,
   isPrivate: false,
 }
@@ -147,6 +150,24 @@ export function CreateRoomForm() {
           label="Reveal songs one by one"
           checked={!!settings.sequentialReveal}
           onChange={() => toggle('sequentialReveal')}
+        />
+        <Toggle
+          icon={ImageIcon}
+          label="Hide album cover"
+          checked={!!settings.hideCoverArt}
+          onChange={() => toggle('hideCoverArt')}
+        />
+        <Toggle
+          icon={Disc}
+          label="Hide album name"
+          checked={!!settings.hideAlbumName}
+          onChange={() => toggle('hideAlbumName')}
+        />
+        <Toggle
+          icon={Volume2}
+          label="Hide audio preview"
+          checked={!!settings.hidePreview}
+          onChange={() => toggle('hidePreview')}
         />
         <Toggle
           icon={Lock}

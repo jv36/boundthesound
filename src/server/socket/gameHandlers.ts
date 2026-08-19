@@ -1,7 +1,7 @@
 import type { Server, Socket } from 'socket.io'
 import { z } from 'zod'
 import { roomManager } from '../rooms/RoomManager'
-import type { MaskedSong, Room, RoomSettings, Round, Song } from '@/types/game'
+import type { MaskedSong, Room, RoomSettings, Round, Song, Guess, RevealableField } from '@/types/game'
 
 const SongSchema = z.object({
   trackId: z.string(),
@@ -18,31 +18,51 @@ const PickSongsSchema = z.object({
   topic: z.string().min(1).max(100).trim(),
 })
 
-function maskSongs(songs: Song[], hideArtist: boolean, hideSongTitle: boolean): MaskedSong[] {
+function maskSongs(songs: Song[], settings: RoomSettings): MaskedSong[] {
   return songs.map((s) => ({
     ...s,
-    title: hideSongTitle ? null : s.title,
-    artist: hideArtist ? null : s.artist,
+    title: settings.hideSongTitle ? null : s.title,
+    artist: settings.hideArtist ? null : s.artist,
+    album: settings.hideAlbumName ? null : s.album,
+    albumArt: settings.hideCoverArt ? null : s.albumArt,
+    previewUrl: settings.hidePreview ? null : s.previewUrl,
   }))
 }
 
 // Builds what guessers should currently see for a round: only the revealed songs, and with
-// title/artist masked unless the picker has manually revealed that field for that song.
+// masked fields hidden unless the picker has manually revealed that field for that song.
 function guesserSongs(round: Round, settings: RoomSettings): Array<Song | MaskedSong> {
   return round.songs.slice(0, round.revealedCount).map((song, i) => {
-    const revealed = round.revealedFields[i] ?? { title: false, artist: false }
+    const revealed = round.revealedFields[i] ?? {
+      title: false,
+      artist: false,
+      album: false,
+      albumArt: false,
+      previewUrl: false,
+    }
     return {
       ...song,
       title: settings.hideSongTitle && !revealed.title ? null : song.title,
       artist: settings.hideArtist && !revealed.artist ? null : song.artist,
+      album: settings.hideAlbumName && !revealed.album ? null : song.album,
+      albumArt: settings.hideCoverArt && !revealed.albumArt ? null : song.albumArt,
+      previewUrl: settings.hidePreview && !revealed.previewUrl ? null : song.previewUrl,
     }
   })
 }
 
-// Broadcasts room state to everyone, keeping the current round's topic hidden — and songs
-// masked/limited to what's been revealed — from non-pickers while the round is still in
-// progress. Every game action must go through this so guesses, validations, reveals, etc.
-// actually reach clients — they only re-render off `room:updated`.
+// Hides the text of other players' correct guesses so they can't be used as free hints —
+// a viewer only ever sees the content of their own guesses, correct or not. The picker (who
+// gets the unmasked round) and the guesser themselves always see the full text.
+function guesserGuesses(guesses: Guess[], viewerId: string): Guess[] {
+  return guesses.map((g) => (g.isCorrect === true && g.playerId !== viewerId ? { ...g, text: '' } : g))
+}
+
+// Broadcasts room state to everyone, keeping the current round's topic hidden — songs
+// masked/limited to what's been revealed, and other players' correct guess text hidden —
+// from non-pickers while the round is still in progress. Every game action must go through
+// this so guesses, validations, reveals, etc. actually reach clients — they only re-render
+// off `room:updated`.
 function broadcastRoomUpdate(io: Server, room: Room): void {
   const round = room.rounds[room.currentRound]
   const inProgress = round && (round.state === 'picking' || round.state === 'guessing')
@@ -52,18 +72,23 @@ function broadcastRoomUpdate(io: Server, room: Room): void {
     return
   }
 
-  const pickerSocketId = room.players.find((p) => p.id === round.pickerId)?.socketId
-  const guesserRound: Round = { ...round, topic: null, songs: guesserSongs(round, room.settings) }
-  const guesserRoom: Room = {
-    ...room,
-    rounds: room.rounds.map((r, i) => (i === room.currentRound ? guesserRound : r)),
-  }
+  for (const player of room.players) {
+    if (player.id === round.pickerId) {
+      io.to(player.socketId).emit('room:updated', room)
+      continue
+    }
 
-  if (pickerSocketId) {
-    io.to(pickerSocketId).emit('room:updated', room)
-    io.to(room.id).except(pickerSocketId).emit('room:updated', guesserRoom)
-  } else {
-    io.to(room.id).emit('room:updated', guesserRoom)
+    const guesserRound: Round = {
+      ...round,
+      topic: null,
+      songs: guesserSongs(round, room.settings),
+      guesses: guesserGuesses(round.guesses, player.id),
+    }
+    const guesserRoom: Room = {
+      ...room,
+      rounds: room.rounds.map((r, i) => (i === room.currentRound ? guesserRound : r)),
+    }
+    io.to(player.socketId).emit('room:updated', guesserRoom)
   }
 }
 
@@ -85,13 +110,12 @@ export function registerGameHandlers(io: Server, socket: Socket) {
     if (!updated) return callback?.({ error: 'Could not submit songs' })
 
     const currentRound = updated.rounds[updated.currentRound]
-    const { hideArtist, hideSongTitle } = updated.settings
 
     broadcastRoomUpdate(io, updated)
 
     io.to(room.id).emit('game:songs-revealed', {
       roundNumber: currentRound.number,
-      songs: maskSongs(songs as Song[], hideArtist, hideSongTitle),
+      songs: maskSongs(songs as Song[], updated.settings),
     })
 
     callback?.({})
@@ -181,10 +205,10 @@ export function registerGameHandlers(io: Server, socket: Socket) {
     callback?.({})
   })
 
-  // Picker manually reveals a hidden title/artist for one song, as a hint
+  // Picker manually reveals a hidden field for one song, as a hint
   socket.on(
     'game:reveal-field',
-    (data: { index?: number; field?: 'title' | 'artist' }, callback: Function) => {
+    (data: { index?: number; field?: RevealableField }, callback: Function) => {
       if (data?.index === undefined || !data.field) return callback?.({ error: 'Missing fields' })
 
       const room = roomManager.getRoomForSocket(socket.id)

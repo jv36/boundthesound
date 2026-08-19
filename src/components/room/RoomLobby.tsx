@@ -71,12 +71,19 @@ export function RoomLobby({ room, currentUserId }: RoomLobbyProps) {
       <PlayerList players={room.players} hostId={room.hostId} currentUserId={currentUserId} />
 
       {/* Modifiers */}
-      {(room.settings.hideArtist || room.settings.hideSongTitle) && (
+      {(room.settings.hideArtist ||
+        room.settings.hideSongTitle ||
+        room.settings.hideCoverArt ||
+        room.settings.hideAlbumName ||
+        room.settings.hidePreview) && (
         <div className="glass p-3 text-sm text-yellow-400/80 border-yellow-500/20">
           🎭 Hard mode:{' '}
           {[
             room.settings.hideArtist && 'artists hidden',
             room.settings.hideSongTitle && 'titles hidden',
+            room.settings.hideCoverArt && 'covers hidden',
+            room.settings.hideAlbumName && 'albums hidden',
+            room.settings.hidePreview && 'previews hidden',
           ]
             .filter(Boolean)
             .join(' & ')}

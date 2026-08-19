@@ -45,17 +45,17 @@ export function SongCard({
       )}
 
       {/* Album art */}
-      <div className="flex-none w-12 h-12 rounded-lg overflow-hidden bg-white/10">
+      <div className="flex-none w-12 h-12 rounded-lg overflow-hidden bg-white/10 flex items-center justify-center">
         {song.albumArt ? (
           <Image
             src={song.albumArt}
-            alt={song.album}
+            alt={song.album ?? 'Album art'}
             width={48}
             height={48}
             className="object-cover w-full h-full"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-white/20 text-xs">?</div>
+          <EyeOff className="h-4 w-4 text-white/20" />
         )}
       </div>
 
@@ -74,7 +74,7 @@ export function SongCard({
               <EyeOff className="h-3 w-3" /> hidden
             </span>
           )}
-          {song.artist && (
+          {song.album && (
             <span className="text-white/30"> · {song.album}</span>
           )}
         </p>

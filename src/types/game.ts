@@ -10,14 +10,14 @@ export interface Song {
   externalUrl: string
 }
 
-/** Song as presented to guessers (artist/title can be hidden per settings) */
+/** Song as presented to guessers (fields can be hidden per settings) */
 export interface MaskedSong {
   trackId: string
-  title: string | null    // null when hideSongTitle
-  artist: string | null   // null when hideArtist
-  album: string
-  albumArt: string
-  previewUrl: string | null
+  title: string | null      // null when hideSongTitle
+  artist: string | null     // null when hideArtist
+  album: string | null      // null when hideAlbumName
+  albumArt: string | null   // null when hideCoverArt
+  previewUrl: string | null // null when no preview available, or hidePreview
   externalUrl: string
 }
 
@@ -39,11 +39,11 @@ export interface Guess {
   timestamp: number
 }
 
-/** Per-song manual reveal of masked fields (only meaningful when hideSongTitle/hideArtist is on) */
-export interface RevealedFields {
-  title: boolean
-  artist: boolean
-}
+/** Any song field the picker can manually reveal to guessers ahead of the room-wide setting */
+export type RevealableField = 'title' | 'artist' | 'album' | 'albumArt' | 'previewUrl'
+
+/** Per-song manual reveal of masked fields (only meaningful when the matching hide* setting is on) */
+export type RevealedFields = Record<RevealableField, boolean>
 
 export interface Round {
   number: number
@@ -67,6 +67,12 @@ export interface RoomSettings {
   guessTimeSecs: number
   hideArtist: boolean
   hideSongTitle: boolean
+  /** Hide the album cover art from guessers */
+  hideCoverArt: boolean
+  /** Hide the album name from guessers */
+  hideAlbumName: boolean
+  /** Hide the audio preview player from guessers */
+  hidePreview: boolean
   /** Picker reveals songs to guessers one at a time instead of all at once */
   sequentialReveal: boolean
   isPrivate: boolean
@@ -154,7 +160,7 @@ export interface ClientToServerEvents {
   'game:next-round': (callback: (res: { error?: string }) => void) => void
   'game:reveal-next-song': (callback: (res: { error?: string }) => void) => void
   'game:reveal-field': (
-    data: { index: number; field: 'title' | 'artist' },
+    data: { index: number; field: RevealableField },
     callback: (res: { error?: string }) => void,
   ) => void
 }

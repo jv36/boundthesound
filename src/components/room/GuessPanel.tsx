@@ -10,7 +10,10 @@ interface GuessPanelProps {
   roomId: string
   isPicker: boolean
   currentUserId: string
-  hasGuessed: boolean
+  /** 'idle' = can submit a guess, 'pending' = awaiting picker validation, 'correct' = already got it */
+  guessStatus: 'idle' | 'pending' | 'correct'
+  /** How many guesses this player has already made this round (for the "more guesses = fewer points" hint) */
+  myGuessCount: number
   disabled?: boolean
 }
 
@@ -19,7 +22,8 @@ export function GuessPanel({
   roomId,
   isPicker,
   currentUserId,
-  hasGuessed,
+  guessStatus,
+  myGuessCount,
   disabled,
 }: GuessPanelProps) {
   const socket = useSocket()
@@ -54,7 +58,10 @@ export function GuessPanel({
         {guesses.length === 0 && (
           <p className="text-sm text-white/30 text-center py-4">No guesses yet…</p>
         )}
-        {guesses.map((guess) => (
+        {guesses.map((guess) => {
+          const isOwn = guess.playerId === currentUserId
+          const isHiddenFromMe = guess.isCorrect === true && !isOwn && !guess.text
+          return (
           <div
             key={`${guess.playerId}-${guess.timestamp}`}
             className={cn(
@@ -68,9 +75,13 @@ export function GuessPanel({
           >
             <div className="flex-1 min-w-0">
               <span className="text-white/50 text-xs">{guess.playerName}: </span>
-              <span className={guess.isCorrect === false ? 'line-through text-white/40' : ''}>
-                {guess.text}
-              </span>
+              {isHiddenFromMe ? (
+                <span className="italic text-white/40">guessed correctly (hidden)</span>
+              ) : (
+                <span className={guess.isCorrect === false ? 'line-through text-white/40' : ''}>
+                  {guess.text}
+                </span>
+              )}
               {guess.points ? (
                 <span className="ml-2 text-xs text-green-400 font-semibold">+{guess.points}</span>
               ) : null}
@@ -96,29 +107,41 @@ export function GuessPanel({
               </div>
             )}
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Input (non-pickers only) */}
-      {!isPicker && !hasGuessed && (
-        <form onSubmit={submitGuess} className="flex gap-2 mt-1">
-          <input
-            className="input flex-1"
-            placeholder="What's the connection?"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            disabled={disabled || submitting}
-          />
-          <button type="submit" className="btn-primary px-3" disabled={!text.trim() || submitting}>
-            <Send className="h-4 w-4" />
-          </button>
-        </form>
+      {!isPicker && guessStatus === 'idle' && (
+        <>
+          <form onSubmit={submitGuess} className="flex gap-2 mt-1">
+            <input
+              className="input flex-1"
+              placeholder="What's the connection?"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              disabled={disabled || submitting}
+            />
+            <button type="submit" className="btn-primary px-3" disabled={!text.trim() || submitting}>
+              <Send className="h-4 w-4" />
+            </button>
+          </form>
+          {myGuessCount > 0 && (
+            <p className="text-xs text-white/30">
+              Guess #{myGuessCount + 1} — the more guesses it takes, the fewer points it's worth.
+            </p>
+          )}
+        </>
       )}
 
-      {hasGuessed && !isPicker && (
+      {guessStatus === 'pending' && !isPicker && (
         <p className="text-sm text-white/40 text-center py-1">
           Waiting for the picker to validate…
         </p>
+      )}
+
+      {guessStatus === 'correct' && !isPicker && (
+        <p className="text-sm text-green-400 text-center py-1">You got it! 🎉</p>
       )}
 
       {error && <p className="text-red-400 text-sm">{error}</p>}

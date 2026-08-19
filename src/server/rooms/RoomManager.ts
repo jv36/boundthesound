@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid'
-import type { Room, Player, Song, Guess, Round, RoomSettings } from '@/types/game'
+import type { Room, Player, Song, Guess, Round, RoomSettings, RevealableField } from '@/types/game'
 
 const DEFAULT_SETTINGS: RoomSettings = {
   maxPlayers: 8,
@@ -8,6 +8,9 @@ const DEFAULT_SETTINGS: RoomSettings = {
   guessTimeSecs: 60,
   hideArtist: false,
   hideSongTitle: false,
+  hideCoverArt: false,
+  hideAlbumName: false,
+  hidePreview: false,
   sequentialReveal: false,
   isPrivate: false,
 }
@@ -157,7 +160,13 @@ class RoomManager {
 
     round.songs = songs
     round.revealedCount = room.settings.sequentialReveal ? Math.min(1, songs.length) : songs.length
-    round.revealedFields = songs.map(() => ({ title: false, artist: false }))
+    round.revealedFields = songs.map(() => ({
+      title: false,
+      artist: false,
+      album: false,
+      albumArt: false,
+      previewUrl: false,
+    }))
     round.topic = topic
     round.state = 'guessing'
     round.startedAt = Date.now()
@@ -172,8 +181,13 @@ class RoomManager {
     const round = room.rounds[room.currentRound]
     if (!round || round.state !== 'guessing') return null
     if (round.pickerId === playerId) return null
-    // One guess per player per round
-    if (round.guesses.some((g) => g.playerId === playerId)) return null
+
+    // Multiple guesses per round are allowed, but a player can't guess again once
+    // they've already gotten it right, and must wait for the picker to validate
+    // their current guess before submitting another one.
+    const playerGuesses = round.guesses.filter((g) => g.playerId === playerId)
+    if (playerGuesses.some((g) => g.isCorrect === true)) return null
+    if (playerGuesses.some((g) => g.isCorrect === undefined)) return null
 
     round.guesses.push({ playerId, playerName, text, timestamp: Date.now() })
     return room
@@ -191,7 +205,7 @@ class RoomManager {
     return room
   }
 
-  revealField(roomId: string, pickerId: string, index: number, field: 'title' | 'artist'): Room | null {
+  revealField(roomId: string, pickerId: string, index: number, field: RevealableField): Room | null {
     const room = this.rooms.get(roomId)
     if (!room) return null
 
@@ -221,9 +235,16 @@ class RoomManager {
 
     let points = 0
     if (isCorrect) {
-      // First correct = 50pts, second = 40, …, floor at 10
+      // Speed bonus: first correct answer overall = 50pts, second = 40, …, floor at 10
       const correctsSoFar = round.guesses.filter((g) => g.isCorrect === true).length
-      points = Math.max(10, 50 - (correctsSoFar - 1) * 10)
+      const orderBonus = Math.max(10, 50 - (correctsSoFar - 1) * 10)
+
+      // Accuracy penalty: every extra guess it took this player to get there costs
+      // 10pts, so more guesses always means fewer points.
+      const attempts = round.guesses.filter((g) => g.playerId === guessPlayerId).length
+      const attemptPenalty = (attempts - 1) * 10
+
+      points = Math.max(10, orderBonus - attemptPenalty)
       guess.points = points
       const player = room.players.find((p) => p.id === guessPlayerId)
       if (player) player.score += points

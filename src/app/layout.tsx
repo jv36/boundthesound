@@ -8,11 +8,11 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'BoundTheSound',
-  description: 'Real-time multiplayer music guessing game',
+  title: 'Linking Park',
+  description: 'Can you find the link between these songs?',
   openGraph: {
-    title: 'BoundTheSound',
-    description: 'Can you find the common theme between these songs?',
+    title: 'Linking Park',
+    description: 'Can you find the link between these songs?',
   },
 }
 

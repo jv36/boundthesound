@@ -1,6 +1,7 @@
 'use client'
 import { SocketProvider } from '@/hooks/useSocket'
 import { IdentityProvider } from '@/hooks/useIdentity'
+import { AudioSettingsProvider } from '@/hooks/useAudioSettings'
 
 export function Providers({
   children,
@@ -11,7 +12,9 @@ export function Providers({
 }) {
   return (
     <IdentityProvider initial={identity}>
-      <SocketProvider>{children}</SocketProvider>
+      <AudioSettingsProvider>
+        <SocketProvider>{children}</SocketProvider>
+      </AudioSettingsProvider>
     </IdentityProvider>
   )
 }

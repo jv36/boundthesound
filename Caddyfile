@@ -1,4 +1,4 @@
 # Caddy automatically provisions & renews HTTPS via Let's Encrypt.
-boundthesound.joaovicente.dev {
+linkingpark.joaovicente.dev {
 	reverse_proxy app:3000
 }
